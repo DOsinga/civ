@@ -1,0 +1,49 @@
+<script type="text/markdown" id="info">
+name: Civilization
+description: "Classic turn-based strategy game. Build cities, research technologies, and conquer the world!"
+type: games
+github: civ
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+<style>
+#game-canvas {
+    width: 960px;
+    height: 600px;
+    image-rendering: pixelated;
+    display: block;
+}
+#game-container {
+    display: inline-block;
+}
+/* City screen is now canvas-based */
+</style>
+
+<link rel="stylesheet" href="{{ static }}styles.css">
+
+<div id="game-container">
+    <canvas id="game-canvas" width="960" height="600"></canvas>
+</div>
+
+<!-- City screen is now rendered on the main canvas -->
+
+<script type="module">
+    import '{{ static }}game.js';
+
+    loadSprites("{{ static }}assets/atlas.png", "{{ static }}assets/atlas.json");
+
+    const gameData = {
+        mapPacked: "{{ map_packed }}",
+        riversPacked: "{{ rivers_packed }}",
+        starts: {{ starts_json|safe }}
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => initGame(gameData));
+    } else {
+        initGame(gameData);
+    }
+</script>

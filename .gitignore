@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+# Working material for the artist: sheets, references and previews, many showing the original Civ 1 art
+art/sheets/
+art/candidates/
+art/originals/
+static/screenshots/
+
+# Still the original Civ 1 sprites
+art/sprites/terrain/grassland/

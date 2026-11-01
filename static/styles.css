@@ -1,0 +1,473 @@
+/* Civilization 1 Style CSS */
+
+/* Menu Bar - Black background, first letter white, rest gray */
+#menu-bar {
+    display: flex;
+    background: #000;
+    padding: 2px 4px;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.menu-item {
+    color: #888;
+    padding: 2px 12px;
+    cursor: pointer;
+}
+
+.menu-item::first-letter {
+    color: #fff;
+}
+
+.menu-item:hover {
+    color: #aaa;
+}
+
+/* Main Game Container */
+#game-container {
+    display: flex;
+    font-family: 'Courier New', monospace;
+    background: #000;
+}
+
+/* Left Sidebar - Gray pattern background */
+#sidebar {
+    width: calc(80px * var(--css-scale, 3));
+    background: repeating-linear-gradient(
+        0deg,
+        #a0a0a0 0px, #a0a0a0 1px,
+        #808080 1px, #808080 2px
+    );
+    border-right: 2px solid #000;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Unit Preview - Green border like original */
+#unit-preview {
+    background: #000;
+    border: 3px solid #0a0;
+    margin: 4px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 60px;
+}
+
+#unit-preview-canvas {
+    width: calc(48px * var(--css-scale, 3) / 2);
+    height: calc(48px * var(--css-scale, 3) / 2);
+    image-rendering: pixelated;
+    background: transparent;
+}
+
+/* Minimap Container */
+#minimap-container {
+    background: #000;
+    border: 2px solid #888;
+    margin: 4px;
+}
+
+#minimap {
+    display: block;
+    image-rendering: pixelated;
+    cursor: pointer;
+}
+
+/* Stats Panel - Gray pattern */
+#stats-panel {
+    background: transparent;
+    color: #000;
+    padding: 4px 8px;
+    font-size: 11px;
+    border-top: 1px solid #888;
+}
+
+#gold-display {
+    color: #000;
+}
+
+#turn-display {
+    color: #000;
+}
+
+#research-display {
+    color: #000;
+}
+
+/* Unit Info Panel - Gray pattern */
+#unit-info {
+    background: transparent;
+    color: #000;
+    padding: 4px 8px;
+    font-size: 10px;
+    flex: 1;
+    border-top: 1px solid #888;
+}
+
+#unit-details {
+    margin-bottom: 4px;
+}
+
+#tile-terrain {
+    color: #000;
+    font-size: 10px;
+}
+
+/* Unit Actions */
+#unit-actions {
+    padding: 4px;
+}
+
+.action-btn {
+    display: block;
+    width: 100%;
+    padding: 4px 8px;
+    font-size: 10px;
+    background: #808080;
+    color: #000;
+    border: 2px outset #aaa;
+    cursor: pointer;
+    margin: 2px 0;
+    font-family: 'Courier New', monospace;
+}
+.action-btn:hover { background: #909090; }
+.action-btn:active { border-style: inset; }
+
+/* Game Area */
+#game-area {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    background: #000;
+}
+
+#main-canvas {
+    display: block;
+    background: #1a1a2e;
+    cursor: default;
+    image-rendering: pixelated;
+}
+
+/* City Screen Modal - Retro Civ 1 Style */
+#city-screen {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+    font-family: 'Courier New', monospace;
+}
+
+#city-screen.visible {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#city-modal {
+    background: #5078b8;
+    border: 4px solid #000;
+    width: 640px;
+    color: #000;
+    image-rendering: pixelated;
+}
+
+/* City Header - Name + Population + Citizens */
+#city-header {
+    background: #5078b8;
+    color: #fff;
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 2px solid #000;
+    text-shadow: 1px 1px #000;
+}
+
+#city-name-display {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+#city-pop-display {
+    font-size: 12px;
+}
+
+#citizens-display {
+    display: flex;
+    gap: 0;
+    margin-left: 8px;
+}
+
+.citizen-sprite {
+    width: 32px;
+    height: 48px;
+    display: inline-block;
+}
+
+.citizen-sprite canvas {
+    display: block;
+    width: 32px;
+    height: 48px;
+    image-rendering: pixelated;
+}
+
+/* City Content - 3 Column Layout */
+#city-content {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: #5078b8;
+}
+
+#city-left {
+    width: 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+#city-center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#city-right {
+    width: 160px;
+}
+
+/* City Panels */
+.city-panel {
+    background: #3860a0;
+    border: 2px solid #000;
+}
+
+.city-panel-title {
+    background: #000;
+    color: #fff;
+    padding: 2px 6px;
+    font-weight: bold;
+    font-size: 11px;
+    text-align: center;
+}
+
+/* Resources Display */
+#resources-display {
+    padding: 4px;
+    background: #5078b8;
+}
+
+.resource-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-bottom: 2px;
+    min-height: 16px;
+}
+
+.resource-icon {
+    width: 16px;
+    height: 16px;
+    display: inline-block;
+}
+
+.resource-icon canvas {
+    display: block;
+    width: 16px;
+    height: 16px;
+    image-rendering: pixelated;
+}
+
+/* Food Storage Grid */
+#food-storage-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1px;
+    padding: 4px;
+    background: #203858;
+    min-height: 60px;
+}
+
+/* City Tabs */
+#city-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 4px;
+}
+
+.city-tab {
+    padding: 4px 12px;
+    background: #3860a0;
+    color: #fff;
+    border: 2px solid #000;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.city-tab:hover, .city-tab.active {
+    background: #5888c8;
+}
+
+/* City Map Canvas */
+#city-map-canvas {
+    border: 2px solid #000;
+    background: #000;
+    cursor: pointer;
+    image-rendering: pixelated;
+}
+
+/* Improvements List */
+#improvements-panel {
+    height: 100%;
+}
+
+#improvements-list {
+    padding: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+    font-size: 10px;
+}
+
+.improvement-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 4px;
+    color: #fff;
+    background: #3860a0;
+    margin-bottom: 1px;
+}
+
+.sell-btn {
+    background: #c00;
+    color: #fff;
+    border: 1px solid #000;
+    border-radius: 50%;
+    width: 14px;
+    height: 14px;
+    font-size: 9px;
+    cursor: pointer;
+    line-height: 12px;
+    padding: 0;
+}
+
+.sell-btn:hover {
+    background: #f00;
+}
+
+/* Bottom Row: Production + Buttons */
+#city-bottom {
+    display: flex;
+    border-top: 2px solid #000;
+    background: #5078b8;
+}
+
+#production-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+}
+
+#production-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#production-icon-canvas {
+    border: 2px solid #000;
+    background: #3860a0;
+    image-rendering: pixelated;
+}
+
+#production-name {
+    font-size: 10px;
+    color: #fff;
+    text-align: center;
+    text-shadow: 1px 1px #000;
+}
+
+#production-shields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1px;
+    max-width: 200px;
+}
+
+/* City Buttons */
+#city-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+}
+
+.city-btn {
+    padding: 4px 12px;
+    background: #3860a0;
+    color: #fff;
+    border: 2px solid #000;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+.city-btn:hover {
+    background: #5888c8;
+}
+
+/* Production Change Modal */
+#change-production {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #5078b8;
+    border: 4px solid #000;
+    padding: 8px;
+    z-index: 1001;
+    max-height: 400px;
+    max-width: 300px;
+    overflow-y: auto;
+}
+
+#change-production.visible {
+    display: block;
+}
+
+#production-options {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.production-option {
+    padding: 4px 8px;
+    background: #3860a0;
+    margin: 2px 0;
+    cursor: pointer;
+    font-size: 11px;
+    color: #fff;
+    border: 1px solid #000;
+}
+
+.production-option:hover {
+    background: #5888c8;
+}
+
+.production-option.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
