@@ -121,6 +121,14 @@ x=0     x=80                                    x=320
 - Text: First letter WHITE, rest GRAY
 - Menu items: GAME, ORDERS, ADVISORS, WORLD, CIVILOPEDIA
 - Font: 8px high
+- Clicking a title drops down its menu, as in Civ 1; arrow keys move through the items and
+  across menus, Enter picks, Escape closes. Each item shows its keyboard shortcut.
+  - Game: Tax Rate, Luxuries Rate, FindCity, REVOLUTION!, Quit
+  - Orders: only the orders the active unit can carry out (space, b, r, i, m, f, w, s, h, D)
+  - Advisors: City Status (F1), Military (F2), Intelligence (F3), Attitude (F4), Trade (F5), Science (F6)
+  - World: Wonders of the World (F7), Top 5 Cities (F8), Civilization Score (F9), World Map (F10)
+  - Civilopedia: Advances, City Improvements, Military Units, Terrain Types
+- Menus are built in `game.js` (`buildMenus`, `unitOrders`), reports in `reports.js`
 
 #### Sidebar (0, 14) - (80, 200)
 From top to bottom:
@@ -218,6 +226,8 @@ All modal screens/dialogs must be represented as UIStateType values:
 | BUY_CONFIRM | { city, cost, onConfirm } | Confirm purchase dialog |
 | INFO_DIALOG | { message, onDismiss } | Generic info popup |
 | CHOICE_DIALOG | { message, choices, onChoice } | Generic choice popup |
+| MENU | { menus, index, selectedIndex } | Drop-down menu from the menu bar |
+| REPORT | { title, lines, items?, onSelect?, onClose?, worldMap? } | Full-screen advisor, world or Civilopedia report |
 
 ### Architecture Rules
 

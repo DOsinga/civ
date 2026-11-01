@@ -467,8 +467,26 @@ function drawUnit(unit, destX, destY, isSelected) {
 // SCREEN SECTIONS
 // ============================================
 
-function drawMenuBar() {
-    // Black background
+// Press Start 2P is monospaced: every character is as wide as the font size
+const MENU_TITLES = ['Game', 'Orders', 'Advisors', 'World', 'Civilopedia'];
+const MENU_CHAR = 8;
+const MENU_TITLE_X = MENU_TITLES.map((_, i) =>
+    2 + MENU_TITLES.slice(0, i).reduce((x, title) => x + (title.length + 1) * MENU_CHAR, 0));
+const DROPDOWN_CHAR = 6;
+const DROPDOWN_LINE = 9;
+
+function keyLabel(key) {
+    return key === ' ' ? 'space' : key || '';
+}
+
+function dropdownBox(menu, index) {
+    const chars = Math.max(...menu.items.map(item => item.label.length + (item.key ? keyLabel(item.key).length + 2 : 0)));
+    const w = chars * DROPDOWN_CHAR + 12;
+    const x = Math.min(MENU_TITLE_X[index] - 2, VIEW_WIDTH - w);
+    return { x, y: MENU_HEIGHT, w, h: menu.items.length * DROPDOWN_LINE + 6 };
+}
+
+function drawMenuBar(openIndex = -1) {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, VIEW_WIDTH, MENU_HEIGHT);
 
@@ -476,23 +494,63 @@ function drawMenuBar() {
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
 
-    // Menu items with first letter highlighted
-    const items = ['Game', 'Orders', 'Advisors', 'World', 'Civilopedia'];
-    let x = 2;
-
-    for (const item of items) {
-        // First letter white
+    MENU_TITLES.forEach((title, i) => {
+        const x = MENU_TITLE_X[i];
+        if (i === openIndex) {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(x - 2, 0, title.length * MENU_CHAR + 4, MENU_HEIGHT);
+            ctx.fillStyle = '#000';
+            ctx.fillText(title, x, 0);
+            return;
+        }
         ctx.fillStyle = '#fff';
-        ctx.fillText(item[0], x, 0);
-
-        // Rest gray
+        ctx.fillText(title[0], x, 0);
         ctx.fillStyle = '#888';
-        const firstLetterWidth = ctx.measureText(item[0]).width;
-        ctx.fillText(item.slice(1), x + firstLetterWidth, 0);
+        ctx.fillText(title.slice(1), x + MENU_CHAR, 0);
+    });
+}
 
-        const fullWidth = ctx.measureText(item).width;
-        x += fullWidth + 8;
+function drawDropdown({ menus, index, selectedIndex }) {
+    const menu = menus[index];
+    const box = dropdownBox(menu, index);
+    drawGrayTexture(box.x, box.y, box.w, box.h);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+
+    ctx.font = '6px "Press Start 2P", monospace';
+    ctx.textBaseline = 'top';
+    menu.items.forEach((item, i) => {
+        const y = box.y + 3 + i * DROPDOWN_LINE;
+        if (i === selectedIndex) {
+            ctx.fillStyle = '#0aa';
+            ctx.fillRect(box.x + 2, y, box.w - 4, DROPDOWN_LINE);
+        }
+        ctx.fillStyle = item.disabled ? '#555' : i === selectedIndex ? '#fff' : '#000';
+        ctx.textAlign = 'left';
+        ctx.fillText(item.label, box.x + 6, y + 2);
+        if (item.key) {
+            ctx.textAlign = 'right';
+            ctx.fillText(keyLabel(item.key), box.x + box.w - 6, y + 2);
+        }
+    });
+    ctx.textAlign = 'left';
+}
+
+// What a click hits while the menu bar is visible: { title } for a menu title, { item } for an
+// entry of the open menu, or null
+export function menuHitAt(screenX, screenY) {
+    const { x, y } = toScreenUnits(screenX, screenY);
+    if (y < MENU_HEIGHT) {
+        const title = MENU_TITLE_X.findLastIndex(tx => x >= tx - 2);
+        return title >= 0 && x < MENU_TITLE_X[title] + MENU_TITLES[title].length * MENU_CHAR + 2 ? { title } : null;
     }
+    const state = uiState.getState();
+    if (state.type !== UIStateType.MENU) return null;
+    const box = dropdownBox(state.data.menus[state.data.index], state.data.index);
+    const item = Math.floor((y - box.y - 3) / DROPDOWN_LINE);
+    const inside = x >= box.x && x < box.x + box.w && item >= 0 && item < state.data.menus[state.data.index].items.length;
+    return inside ? { item } : null;
 }
 
 function drawSidebar(selectedUnit, gameState) {
@@ -553,7 +611,7 @@ function drawSidebar(selectedUnit, gameState) {
 
     // Unit info text based on UI state
     ctx.fillStyle = '#000';
-    if (gameState?.type === 'unit_active' && selectedUnit) {
+    if ((gameState?.type === UIStateType.UNIT_ACTIVE || gameState?.type === UIStateType.MENU) && selectedUnit) {
         const player = world.getPlayer(selectedUnit.player);
         ctx.fillText(player?.adjective || 'Unknown', 4, infoY + 14);
         ctx.fillText(selectedUnit.name, 4, infoY + 24);
@@ -789,11 +847,18 @@ export function render(selectedUnit = null, gameState = null) {
         return;
     }
 
-    drawMenuBar();
+    if (state.type === UIStateType.REPORT) {
+        drawReport(state.data);
+        return;
+    }
+
+    drawMenuBar(state.type === UIStateType.MENU ? state.data.index : -1);
     drawSidebar(selectedUnit, gameState);
     drawMapArea(selectedUnit);
 
-    if (state.type === UIStateType.INFO_DIALOG) {
+    if (state.type === UIStateType.MENU) {
+        drawDropdown(state.data);
+    } else if (state.type === UIStateType.INFO_DIALOG) {
         drawDialog(null, wrapText(state.data.message, DIALOG_CHARS), -1);
     } else if (state.type === UIStateType.CHOICE_DIALOG) {
         drawDialog(state.data.title, state.data.options.map(o => o.label), state.data.selectedIndex);
@@ -866,6 +931,91 @@ function drawDialog(title, lines, selectedIndex) {
         ctx.fillStyle = '#000';
         ctx.fillText(line, DIALOG_X + 6, y);
     });
+}
+
+// ============================================
+// REPORTS (advisors, world, Civilopedia)
+// ============================================
+
+const REPORT_MARGIN = 8;
+const REPORT_TOP = 26;
+const REPORT_LINE = 9;
+const REPORT_ROWS = Math.floor((VIEW_HEIGHT - REPORT_TOP - REPORT_MARGIN) / REPORT_LINE);
+const REPORT_CHARS = Math.floor((VIEW_WIDTH - 2 * REPORT_MARGIN) / 6);
+
+function reportColumns(count) {
+    return Math.ceil(count / REPORT_ROWS);
+}
+
+function drawReport(report) {
+    if (report.worldMap) {
+        drawWorldMap();
+        return;
+    }
+    drawGrayTexture(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#000';
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.fillText(report.title, REPORT_MARGIN, REPORT_MARGIN);
+    ctx.fillStyle = '#0ff';
+    ctx.fillRect(REPORT_MARGIN, REPORT_MARGIN + 11, VIEW_WIDTH - 2 * REPORT_MARGIN, 1);
+
+    ctx.font = '6px "Press Start 2P", monospace';
+    if (report.items) {
+        const colW = (VIEW_WIDTH - 2 * REPORT_MARGIN) / reportColumns(report.items.length);
+        report.items.forEach((item, i) => {
+            const x = REPORT_MARGIN + Math.floor(i / REPORT_ROWS) * colW;
+            const y = REPORT_TOP + (i % REPORT_ROWS) * REPORT_LINE;
+            if (i === report.selectedIndex) {
+                ctx.fillStyle = '#0aa';
+                ctx.fillRect(x - 2, y - 2, colW - 4, REPORT_LINE);
+            }
+            ctx.fillStyle = '#000';
+            ctx.fillText(item.label, x, y);
+        });
+        return;
+    }
+    const lines = report.lines.flatMap(line => line.length > REPORT_CHARS ? wrapText(line, REPORT_CHARS) : [line]);
+    ctx.fillStyle = '#000';
+    lines.slice(0, REPORT_ROWS).forEach((line, i) => {
+        ctx.fillText(line, REPORT_MARGIN, REPORT_TOP + i * REPORT_LINE);
+    });
+}
+
+// The whole world at 6 screen units per tile, which exactly fills the screen
+function drawWorldMap() {
+    const size = Math.min(VIEW_WIDTH / MAP_WIDTH, VIEW_HEIGHT / MAP_HEIGHT);
+    for (let y = 0; y < MAP_HEIGHT; y++) {
+        for (let x = 0; x < MAP_WIDTH; x++) {
+            ctx.fillStyle = getMinimapColor(world.getTerrainAt(x, y));
+            ctx.fillRect(x * size, y * size, size, size);
+        }
+    }
+    for (const city of world.getAllCities()) {
+        ctx.fillStyle = world.getPlayer(city.player).color;
+        ctx.fillRect(city.x * size, city.y * size, size, size);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(city.x * size + 0.5, city.y * size + 0.5, size - 1, size - 1);
+    }
+    for (const unit of world.getAllUnits()) {
+        ctx.fillStyle = world.getPlayer(unit.player).color;
+        ctx.fillRect(unit.x * size + size / 3, unit.y * size + size / 3, size / 3, size / 3);
+    }
+}
+
+// Index of the clicked entry of a report list, or -1
+export function reportItemAt(screenX, screenY) {
+    const state = uiState.getState();
+    const items = state.data.items;
+    if (!items) return -1;
+    const { x, y } = toScreenUnits(screenX, screenY);
+    const colW = (VIEW_WIDTH - 2 * REPORT_MARGIN) / reportColumns(items.length);
+    const col = Math.floor((x - REPORT_MARGIN + 2) / colW);
+    const row = Math.floor((y - REPORT_TOP + 2) / REPORT_LINE);
+    const index = col * REPORT_ROWS + row;
+    return row >= 0 && row < REPORT_ROWS && col >= 0 && index < items.length ? index : -1;
 }
 
 // Index of the clicked option in the choice dialog, or -1 for a click outside it

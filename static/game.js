@@ -15,7 +15,7 @@ import {
     isResearchScreenOpen, handleResearchScreenClick, handleResearchScreenKey,
     isChangeProductionScreenOpen, handleChangeProductionClick, handleChangeProductionKey,
     isBuyConfirmScreenOpen, handleBuyConfirmClick, handleBuyConfirmKey,
-    choiceDialogOptionAt
+    choiceDialogOptionAt, menuHitAt, reportItemAt
 } from './view.js';
 import { handleCityScreenClick } from './city_view.js';
 import {
@@ -26,7 +26,8 @@ import {
 } from './citymanagement.js';
 import { getAvailableGovernments } from './government.js';
 import { TECHNOLOGIES } from './tech.js';
-import { uiState, UIStateType } from './uistate.js';
+import { uiState, UIStateType, UnitStatus } from './uistate.js';
+import * as reports from './reports.js';
 
 // Game state
 let selectedUnit = null;
@@ -154,6 +155,28 @@ function handleMapClick(e) {
         return;
     }
 
+    if (uiState.getState().type === UIStateType.REPORT) {
+        const index = reportItemAt(e.clientX, e.clientY);
+        if (index >= 0) {
+            uiState.chooseReportItem(index);
+        } else {
+            uiState.closeReport();
+        }
+        return;
+    }
+
+    if (uiState.getState().type === UIStateType.MENU) {
+        const hit = menuHitAt(e.clientX, e.clientY);
+        if (hit?.title !== undefined && hit.title !== uiState.getState().data.index) {
+            uiState.switchMenu(hit.title);
+        } else if (hit?.item !== undefined) {
+            uiState.chooseMenuItem(hit.item);
+        } else {
+            uiState.closeMenu();
+        }
+        return;
+    }
+
     if (uiState.getState().type === UIStateType.CHOICE_DIALOG) {
         const index = choiceDialogOptionAt(e.clientX, e.clientY);
         if (index >= 0) {
@@ -218,7 +241,8 @@ function handleMapClick(e) {
     const result = screenToMap(e.clientX, e.clientY);
 
     if (result.inMenu) {
-        showGameMenu();
+        const hit = menuHitAt(e.clientX, e.clientY);
+        if (hit) uiState.openMenu(buildMenus(), hit.title);
         return;
     }
 
@@ -280,21 +304,124 @@ function showBuyProductionDialog() {
 }
 
 // ============================================
-// GAME MENU
+// MENUS
 // ============================================
 
-function showGameMenu() {
+const REPORT_KEYS = {
+    F1: reports.cityStatusReport,
+    F2: reports.militaryReport,
+    F3: reports.intelligenceReport,
+    F4: reports.attitudeReport,
+    F5: reports.tradeReport,
+    F6: reports.scienceReport,
+    F7: reports.wondersReport,
+    F8: reports.topCitiesReport,
+    F9: reports.scoreReport,
+    F10: reports.worldMapReport,
+};
+
+function reportItem(label, key, report) {
+    return { label, key, action: () => uiState.showReport(report()) };
+}
+
+function buildMenus() {
     const player = world.humanPlayer;
-    const options = [{ label: 'Tax Rate', value: 'tax' }, { label: 'Luxury Rate', value: 'lux' }];
-    if (player.government !== 'anarchy') {
-        options.push({ label: 'REVOLUTION!', value: 'revolution' });
+    const unit = uiState.getState().type === UIStateType.UNIT_ACTIVE ? selectedUnit : null;
+    const orders = unit ? unitOrders(unit) : [];
+    const advisorItem = (label, key) => reportItem(label, key, REPORT_KEYS[key]);
+    return [
+        { title: 'Game', items: [
+            { label: 'Tax Rate', action: () => showRateDialog('tax') },
+            { label: 'Luxuries Rate', action: () => showRateDialog('lux') },
+            { label: 'FindCity', action: findCity },
+            { label: 'REVOLUTION!', action: showRevolutionDialog, disabled: player.government === 'anarchy' },
+            { label: 'Quit', action: confirmQuit },
+        ] },
+        { title: 'Orders', items: orders.length ? orders : [{ label: 'No Changes', key: ' ', disabled: true }] },
+        { title: 'Advisors', items: [
+            advisorItem('City Status', 'F1'),
+            advisorItem('Military Advisor', 'F2'),
+            advisorItem('Intelligence Advisor', 'F3'),
+            advisorItem('Attitude Advisor', 'F4'),
+            advisorItem('Trade Advisor', 'F5'),
+            advisorItem('Science Advisor', 'F6'),
+        ] },
+        { title: 'World', items: [
+            advisorItem('Wonders of the World', 'F7'),
+            advisorItem('Top 5 Cities', 'F8'),
+            advisorItem('Civilization Score', 'F9'),
+            advisorItem('World Map', 'F10'),
+        ] },
+        { title: 'Civilopedia', items: [
+            reportItem('Civilization Advances', null, reports.advancesPedia),
+            reportItem('City Improvements', null, reports.improvementsPedia),
+            reportItem('Military Units', null, reports.unitsPedia),
+            reportItem('Terrain Types', null, reports.terrainPedia),
+        ] },
+    ];
+}
+
+// The orders the active unit can carry out, as the Orders menu lists them
+function unitOrders(unit) {
+    const terrain = world.getTerrainAt(unit.x, unit.y);
+    const city = world.getCityAt(unit.x, unit.y);
+    const done = () => uiState.selectNextUnit();
+    const orders = [{ label: 'No Changes', key: ' ', action: () => { unit.skip(); done(); } }];
+
+    if (unit.canFoundCity()) {
+        orders.push({ label: 'Found New City', key: 'b', action: foundCity });
     }
-    uiState.showChoice('Game', options, (choice) => {
-        if (choice === 'revolution') {
-            showRevolutionDialog();
-        } else {
-            showRateDialog(choice);
-        }
+    if (unit.canBuildRoad() && terrain !== TERRAIN.OCEAN) {
+        const rail = world.hasImprovement(unit.x, unit.y, IMPROVEMENT.ROAD) && world.humanPlayer.hasTech('railroad');
+        orders.push({ label: rail ? 'Build RailRoad' : 'Build Road', key: 'r', action: () => buildImprovement(IMPROVEMENT.ROAD) });
+    }
+    if (unit.canIrrigate() && canIrrigate(terrain)) {
+        const to = getIrrigationTransform(terrain);
+        const label = to === null ? 'Build Irrigation' : `Change to ${getTerrainName(to)}`;
+        orders.push({ label, key: 'i', action: () => buildImprovement(IMPROVEMENT.IRRIGATION) });
+    }
+    if (unit.canMine() && canMine(terrain)) {
+        const to = getMineTransform(terrain);
+        const label = to === null ? 'Build Mines' : `Change to ${getTerrainName(to)}`;
+        orders.push({ label, key: 'm', action: () => buildImprovement(IMPROVEMENT.MINE) });
+    }
+    if (!unit.isCivilian) {
+        orders.push({ label: 'Fortify', key: 'f', action: () => { unit.fortify(); done(); } });
+    }
+    orders.push({ label: 'Wait', key: 'w', action: () => {
+        const units = world.humanPlayer.units;
+        units.push(...units.splice(units.indexOf(unit), 1));
+        done();
+    } });
+    orders.push({ label: 'Sentry', key: 's', action: () => { unit.status = UnitStatus.SENTRY; done(); } });
+    if (city && city.player === unit.player && unit.homeCity !== city.id) {
+        orders.push({ label: 'Home City', key: 'h', action: () => {
+            unit.homeCity = city.id;
+            uiState.showInfo(`${unit.name} now has ${city.name} as its home city.`, () => uiState.resume());
+        } });
+    }
+    orders.push({ label: 'Disband Unit', key: 'D', action: () => { world.humanPlayer.removeUnit(unit); done(); } });
+    return orders;
+}
+
+function findCity() {
+    const name = prompt('Find city:');
+    if (!name) return;
+    const city = world.getAllCities().find(c => c.name.toLowerCase().startsWith(name.trim().toLowerCase()));
+    if (!city) {
+        uiState.showInfo(`There is no city called ${name}.`, () => uiState.resume());
+        return;
+    }
+    centerViewOn(city.x, city.y);
+    renderWithState();
+}
+
+function confirmQuit() {
+    uiState.showChoice('Are you sure you want to Quit?', [
+        { label: 'Keep Playing', value: false },
+        { label: 'Yes, start over', value: true },
+    ], (quit) => {
+        if (quit) location.reload();
     });
 }
 
@@ -374,6 +501,23 @@ function handleKeyDown(e) {
         return;
     }
 
+    const type = uiState.getState().type;
+    if (REPORT_KEYS[e.key] && (type === UIStateType.UNIT_ACTIVE || type === UIStateType.TURN_ENDED)) {
+        e.preventDefault();
+        uiState.showReport(REPORT_KEYS[e.key]());
+        return;
+    }
+
+    if (type === UIStateType.UNIT_ACTIVE && selectedUnit && !animatingUnit) {
+        const orders = unitOrders(selectedUnit);
+        const order = orders.find(o => o.key === e.key) || orders.find(o => o.key === e.key.toLowerCase());
+        if (order) {
+            e.preventDefault();
+            order.action();
+            return;
+        }
+    }
+
     // Always prevent arrow keys from scrolling the page
     if (e.key.startsWith('Arrow')) {
         e.preventDefault();
@@ -393,14 +537,6 @@ function handleKeyDown(e) {
         }
         return;
     }
-
-    // B to found city
-    if (e.key === 'b' || e.key === 'B') { foundCity(); }
-
-    // Settler improvement commands
-    if (e.key === 'i' || e.key === 'I') { buildImprovement(IMPROVEMENT.IRRIGATION); }
-    if (e.key === 'r' || e.key === 'R') { buildImprovement(IMPROVEMENT.ROAD); }
-    if (e.key === 'm' || e.key === 'M') { buildImprovement(IMPROVEMENT.MINE); }
 }
 
 function handleKeyUp(e) {
