@@ -16,6 +16,8 @@ import { processAITurn, chooseResearch } from './aiplayer.js';
 export const MAP_WIDTH = 80;
 export const MAP_HEIGHT = 50;
 
+const UNIT_SIGHT = 1;
+const CITY_SIGHT = 2;
 const NEIGHBORS = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
 
 export class World {
@@ -29,6 +31,9 @@ export class World {
         this.turnNumber = 1;
         this.humanPlayerIndex = 0;
         this.nextCityId = 1;
+        this.explored = [];       // Tiles the human player has seen, true or false
+        this.seesAll = false;     // Debug mode: the whole map and every unit show
+        this.difficulty = null;
     }
 
     // Map setup
@@ -36,6 +41,42 @@ export class World {
         this.terrain = terrainMap;
         this.resources = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(null));
         this.improvements = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(null));
+        this.explored = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(false));
+    }
+
+    // Fog of war: the human player sees the land around their units and cities, and remembers
+    // what they have seen. The computer players see everything, as in Civ 1.
+    isExplored(x, y) {
+        if (y < 0 || y >= MAP_HEIGHT) return false;
+        return this.explored[y][((x % MAP_WIDTH) + MAP_WIDTH) % MAP_WIDTH];
+    }
+
+    sightAround(x, y, radius, callback) {
+        for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                if (y + dy >= 0 && y + dy < MAP_HEIGHT) callback((x + dx + MAP_WIDTH) % MAP_WIDTH, y + dy);
+            }
+        }
+    }
+
+    exploreAroundHuman() {
+        const player = this.humanPlayer;
+        for (const unit of player.units) this.sightAround(unit.x, unit.y, UNIT_SIGHT, (x, y) => { this.explored[y][x] = true; });
+        for (const city of player.cities) this.sightAround(city.x, city.y, CITY_SIGHT, (x, y) => { this.explored[y][x] = true; });
+    }
+
+    revealAll() {
+        this.explored = this.explored.map(row => row.map(() => true));
+        this.seesAll = true;
+    }
+
+    // Can the human player see this tile right now, so enemy units on it show?
+    humanSees(x, y) {
+        if (this.seesAll) return true;
+        const player = this.humanPlayer;
+        const near = (tx, ty, radius) => Math.abs(ty - y) <= radius &&
+            Math.min((tx - x + MAP_WIDTH) % MAP_WIDTH, (x - tx + MAP_WIDTH) % MAP_WIDTH) <= radius;
+        return player.units.some(u => near(u.x, u.y, UNIT_SIGHT)) || player.cities.some(c => near(c.x, c.y, CITY_SIGHT));
     }
 
     // Each terrain type has a 1/16 chance to have its bonus resource
@@ -352,10 +393,9 @@ export class World {
         }
 
         const city = this.getCityAt(x, y);
-        if (city && city.player !== unit.player) {
-            return this.captureCity(city, this.getPlayer(unit.player));
-        }
-        return null;
+        const captured = city && city.player !== unit.player ? this.captureCity(city, this.getPlayer(unit.player)) : null;
+        if (unit.player === this.humanPlayer.id) this.exploreAroundHuman();
+        return captured;
     }
 
     // Land military units can walk into an undefended enemy city
@@ -410,6 +450,7 @@ export class World {
         };
         player.addCity(city);
         player.removeUnit(unit);
+        if (player.isHuman) this.exploreAroundHuman();
         return city;
     }
 
@@ -551,6 +592,7 @@ export class World {
                 events.push(...playerEvents);
             }
         }
+        this.exploreAroundHuman();
 
         return events;
     }
@@ -722,29 +764,12 @@ export class World {
     }
 
     toJSON() {
-        return {
-            terrain: this.terrain,
-            resources: this.resources,
-            improvements: this.improvements,
-            players: this.players.map(p => p.toJSON()),
-            currentPlayerIndex: this.currentPlayerIndex,
-            turnNumber: this.turnNumber,
-            humanPlayerIndex: this.humanPlayerIndex,
-            nextCityId: this.nextCityId,
-        };
+        return { ...this, players: this.players.map(p => p.toJSON()) };
     }
 
-    static fromJSON(data) {
-        const world = new World();
-        world.terrain = data.terrain;
-        world.resources = data.resources;
-        world.improvements = data.improvements;
-        world.players = data.players.map(p => Player.fromJSON(p));
-        world.currentPlayerIndex = data.currentPlayerIndex;
-        world.turnNumber = data.turnNumber;
-        world.humanPlayerIndex = data.humanPlayerIndex;
-        world.nextCityId = data.nextCityId;
-        return world;
+    // Everything imports the one world, so a saved game is loaded into it rather than made anew
+    load(data) {
+        Object.assign(this, data, { players: data.players.map(p => Player.fromJSON(p)) });
     }
 }
 

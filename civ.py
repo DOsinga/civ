@@ -5,6 +5,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from django.http import HttpResponseBadRequest, JsonResponse
+
 from projects.common import Project
 
 # Map dimensions
@@ -607,7 +609,7 @@ def pack_rivers(rivers: list) -> str:
     return "".join(result)
 
 
-NUM_PLAYERS = 4
+MAX_PLAYERS = 7
 
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -626,8 +628,17 @@ class Civ(Project):
         d["import_map"] = json.dumps({"imports": modules})
         d["atlas_png"] = versioned_url(STATIC_DIR / "assets/atlas.png")
         d["atlas_json"] = versioned_url(STATIC_DIR / "assets/atlas.json")
+
+    def handle_request(self, handler, request):
+        if handler != "map":
+            return None
+        players = int(request.GET["players"])
+        if not 1 <= players <= MAX_PLAYERS:
+            return HttpResponseBadRequest("players must be 1 to %d" % MAX_PLAYERS)
         seed = random.randint(0, 2**31)
         terrain, rivers = generate_map(seed)
-        d["map_packed"] = pack_map(terrain)
-        d["rivers_packed"] = pack_rivers(rivers)
-        d["starts_json"] = json.dumps(find_starting_positions(terrain, NUM_PLAYERS, seed))
+        return JsonResponse({
+            "map": pack_map(terrain),
+            "rivers": pack_rivers(rivers),
+            "starts": find_starting_positions(terrain, players, seed),
+        })

@@ -11,6 +11,7 @@ export class Player {
     constructor(nationId, isHuman = false) {
         this.id = nextPlayerId++;
         this.nationId = nationId;
+        this.leaderName = getNation(nationId).leader;
         this.isHuman = isHuman;
         this.units = [];
         this.cities = [];
@@ -151,48 +152,13 @@ export class Player {
         return !this.alive;
     }
 
-    // Serialization
     toJSON() {
-        return {
-            id: this.id,
-            nationId: this.nationId,
-            isHuman: this.isHuman,
-            units: this.units.map(u => u.toJSON()),
-            cities: this.cities,
-            gold: this.gold,
-            science: this.science,
-            discoveredTechs: this.discoveredTechs,
-            currentResearch: this.currentResearch,
-            government: this.government,
-            rates: this.rates,
-            revolutionTurns: this.revolutionTurns,
-            nextGovernment: this.nextGovernment,
-            alive: this.alive,
-        };
+        return { ...this, units: this.units.map(u => u.toJSON()) };
     }
 
     static fromJSON(data) {
-        const player = new Player(data.nationId, data.isHuman);
-        player.id = data.id;
-        player.units = data.units.map(u => Unit.fromJSON(u));
-        player.cities = data.cities || [];
-        player.gold = data.gold ?? 50;
-        player.science = data.science ?? 0;
-        player.discoveredTechs = data.discoveredTechs || [];
-        player.currentResearch = data.currentResearch;
-        player.government = data.government;
-        player.rates = data.rates;
-        player.revolutionTurns = data.revolutionTurns;
-        player.nextGovernment = data.nextGovernment;
-        player.alive = data.alive;
-
-        if (data.id >= nextPlayerId) {
-            nextPlayerId = data.id + 1;
-        }
+        const player = Object.assign(new Player(data.nationId, data.isHuman), data, { units: data.units.map(u => Unit.fromJSON(u)) });
+        nextPlayerId = Math.max(nextPlayerId, data.id + 1);
         return player;
     }
-}
-
-export function resetPlayerIds() {
-    nextPlayerId = 0;
 }

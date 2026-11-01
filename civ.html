@@ -29,10 +29,6 @@ github: civ
 <script type="module">
     import '{{ static }}game.js';
 
-    initGame({
-        mapPacked: "{{ map_packed }}",
-        riversPacked: "{{ rivers_packed }}",
-        starts: {{ starts_json|safe }}
-    });
+    initGame();
     loadSprites("{{ atlas_png }}", "{{ atlas_json }}");
 </script>

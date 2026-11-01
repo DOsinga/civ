@@ -29,6 +29,7 @@ class UIStateMachine {
         this.data = null;
         this.pendingEvents = [];
         this.onStateChange = null;  // Callback for rendering
+        this.onNewTurn = null;      // Called once a turn has been played, before its events show
         this.lastUnit = null;       // Unit to return to after a menu or report closes
 
         // View integration callbacks (set by game.js) - for rendering only, not state
@@ -59,6 +60,7 @@ class UIStateMachine {
 
         // Process the turn and get events
         const events = world.step();
+        this.onNewTurn();
         this.startTurn(events);
     }
 
@@ -396,16 +398,23 @@ class UIStateMachine {
         this.notify();
     }
 
+    // A question on the title screen, before there is a game to go back to; it can't be cancelled
+    showSetupChoice(title, options, onSelect) {
+        this.state = UIStateType.CHOICE_DIALOG;
+        this.data = { title, options, onSelect, selectedIndex: 0, setup: true };
+        this.notify();
+    }
+
     chooseOption(index) {
         if (this.state !== UIStateType.CHOICE_DIALOG) return;
-        const { options, onSelect } = this.data;
+        const { options, onSelect, setup } = this.data;
         this.data = null;
-        this.resume();
+        if (!setup) this.resume();
         onSelect(options[index].value);
     }
 
     cancelChoice() {
-        if (this.state !== UIStateType.CHOICE_DIALOG) return;
+        if (this.state !== UIStateType.CHOICE_DIALOG || this.data.setup) return;
         this.data = null;
         this.resume();
     }
@@ -559,6 +568,7 @@ class UIStateMachine {
 
             case UIStateType.CHOICE_DIALOG: {
                 const count = this.data.options.length;
+                if (count === 0) return true;
                 if (key === 'ArrowUp' || key === 'ArrowDown') {
                     this.data.selectedIndex = (this.data.selectedIndex + (key === 'ArrowUp' ? count - 1 : 1)) % count;
                     this.notify();

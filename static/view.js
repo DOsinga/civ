@@ -639,20 +639,21 @@ function drawMinimap(x, y) {
     // Terrain - simple non-wrapped view
     for (let my = 0; my < MAP_HEIGHT; my++) {
         for (let mx = 0; mx < MAP_WIDTH; mx++) {
+            if (!world.isExplored(mx, my)) continue;
             ctx.fillStyle = getMinimapColor(world.getTerrainAt(mx, my));
             ctx.fillRect(x + mx, y + my, 1, 1);
         }
     }
 
     // Cities (1x1 colored dots)
-    for (const city of world.getAllCities()) {
+    for (const city of world.getAllCities().filter(c => world.isExplored(c.x, c.y))) {
         const player = world.getPlayer(city.player);
         ctx.fillStyle = player?.color || '#f00';
         ctx.fillRect(x + city.x, y + city.y, 1, 1);
     }
 
     // Units
-    for (const unit of world.getAllUnits()) {
+    for (const unit of world.getAllUnits().filter(u => u.player === world.humanPlayer.id || world.humanSees(u.x, u.y))) {
         const player = world.getPlayer(unit.player);
         ctx.fillStyle = player?.color || '#fff';
         ctx.fillRect(x + unit.x, y + unit.y, 1, 1);
@@ -770,7 +771,7 @@ function drawMapTiles(selectedUnit) {
             const destX = MAP_X + dx * TILE_SIZE;
             const destY = MAP_Y + dy * TILE_SIZE;
 
-            drawMapTile(mapX, mapY, destX, destY);
+            if (world.isExplored(mapX, mapY)) drawMapTile(mapX, mapY, destX, destY);
         }
     }
 
@@ -785,7 +786,7 @@ function drawMapTiles(selectedUnit) {
     }
 
     // Draw cities
-    for (const city of world.getAllCities()) {
+    for (const city of world.getAllCities().filter(c => world.isExplored(c.x, c.y))) {
         const sx = getScreenX(city.x);
         const sy = city.y - viewY;
         if (sx >= 0 && sx < VIEW_TILES_X && sy >= 0 && sy < VIEW_TILES_Y) {
@@ -799,6 +800,7 @@ function drawMapTiles(selectedUnit) {
 
         // The selected unit hides the others on its tile, so it is on top and blinks over the terrain
         if (!isSelected && selectedUnit && unit.x === selectedUnit.x && unit.y === selectedUnit.y) continue;
+        if (unit.player !== world.humanPlayer.id && !world.humanSees(unit.x, unit.y)) continue;
 
         // Skip units that are inside a city (garrisoned)
         // Only draw selected unit at city if explicitly activated from garrison
@@ -852,6 +854,13 @@ export function render(selectedUnit = null, gameState = null) {
         return;
     }
 
+    // Before there is a world: the title screen with the start-up questions
+    if (state.type === UIStateType.CHOICE_DIALOG && state.data.setup) {
+        drawTitleScreen();
+        drawDialog(state.data.title, state.data.options.map(o => o.label), state.data.selectedIndex, SETUP_DIALOG_X);
+        return;
+    }
+
     drawMenuBar(state.type === UIStateType.MENU ? state.data.index : -1);
     drawSidebar(selectedUnit, gameState);
     drawMapArea(selectedUnit);
@@ -882,6 +891,7 @@ const PANELS = {
 
 const DIALOG_W = 240;
 const DIALOG_X = MAP_X + (MAP_WIDTH_PX - DIALOG_W) / 2;
+const SETUP_DIALOG_X = (VIEW_WIDTH - DIALOG_W) / 2;
 const DIALOG_Y = MAP_Y + 40;
 const DIALOG_LINE = 10;
 const DIALOG_CHARS = Math.floor((DIALOG_W - 12) / 6);
@@ -905,31 +915,42 @@ function dialogFirstLineY(title) {
     return DIALOG_Y + 6 + (title ? DIALOG_LINE + 4 : 0);
 }
 
-function drawDialog(title, lines, selectedIndex) {
+function drawTitleScreen() {
+    drawTexture(ctx, 'terrain/water', 0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    ctx.font = '16px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#000';
+    ctx.fillText('CIVILIZATION', VIEW_WIDTH / 2 + 1, 15);
+    ctx.fillStyle = '#ff0';
+    ctx.fillText('CIVILIZATION', VIEW_WIDTH / 2, 14);
+}
+
+function drawDialog(title, lines, selectedIndex, x = DIALOG_X) {
     const height = 12 + (title ? DIALOG_LINE + 4 : 0) + lines.length * DIALOG_LINE;
-    drawGrayTexture(DIALOG_X, DIALOG_Y, DIALOG_W, height);
+    drawGrayTexture(x, DIALOG_Y, DIALOG_W, height);
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
-    ctx.strokeRect(DIALOG_X + 0.5, DIALOG_Y + 0.5, DIALOG_W - 1, height - 1);
+    ctx.strokeRect(x + 0.5, DIALOG_Y + 0.5, DIALOG_W - 1, height - 1);
 
     ctx.font = '6px "Press Start 2P", monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     if (title) {
         ctx.fillStyle = '#000';
-        ctx.fillText(title, DIALOG_X + 6, DIALOG_Y + 6);
+        ctx.fillText(title, x + 6, DIALOG_Y + 6);
         ctx.fillStyle = '#0ff';
-        ctx.fillRect(DIALOG_X + 6, DIALOG_Y + 6 + DIALOG_LINE, DIALOG_W - 12, 1);
+        ctx.fillRect(x + 6, DIALOG_Y + 6 + DIALOG_LINE, DIALOG_W - 12, 1);
     }
     const firstY = dialogFirstLineY(title);
     lines.forEach((line, i) => {
         const y = firstY + i * DIALOG_LINE;
         if (i === selectedIndex) {
             ctx.fillStyle = '#0aa';
-            ctx.fillRect(DIALOG_X + 4, y - 2, DIALOG_W - 8, DIALOG_LINE);
+            ctx.fillRect(x + 4, y - 2, DIALOG_W - 8, DIALOG_LINE);
         }
         ctx.fillStyle = '#000';
-        ctx.fillText(line, DIALOG_X + 6, y);
+        ctx.fillText(line, x + 6, y);
     });
 }
 
@@ -988,18 +1009,19 @@ function drawWorldMap() {
     const size = Math.min(VIEW_WIDTH / MAP_WIDTH, VIEW_HEIGHT / MAP_HEIGHT);
     for (let y = 0; y < MAP_HEIGHT; y++) {
         for (let x = 0; x < MAP_WIDTH; x++) {
+            if (!world.isExplored(x, y)) continue;
             ctx.fillStyle = getMinimapColor(world.getTerrainAt(x, y));
             ctx.fillRect(x * size, y * size, size, size);
         }
     }
-    for (const city of world.getAllCities()) {
+    for (const city of world.getAllCities().filter(c => world.isExplored(c.x, c.y))) {
         ctx.fillStyle = world.getPlayer(city.player).color;
         ctx.fillRect(city.x * size, city.y * size, size, size);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 1;
         ctx.strokeRect(city.x * size + 0.5, city.y * size + 0.5, size - 1, size - 1);
     }
-    for (const unit of world.getAllUnits()) {
+    for (const unit of world.getAllUnits().filter(u => u.player === world.humanPlayer.id || world.humanSees(u.x, u.y))) {
         ctx.fillStyle = world.getPlayer(unit.player).color;
         ctx.fillRect(unit.x * size + size / 3, unit.y * size + size / 3, size / 3, size / 3);
     }
@@ -1023,7 +1045,8 @@ export function choiceDialogOptionAt(screenX, screenY) {
     const state = uiState.getState();
     const { x, y } = toScreenUnits(screenX, screenY);
     const index = Math.floor((y - dialogFirstLineY(state.data.title) + 2) / DIALOG_LINE);
-    const inside = x >= DIALOG_X && x <= DIALOG_X + DIALOG_W;
+    const left = state.data.setup ? SETUP_DIALOG_X : DIALOG_X;
+    const inside = x >= left && x <= left + DIALOG_W;
     return inside && index >= 0 && index < state.data.options.length ? index : -1;
 }
 

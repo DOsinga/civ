@@ -28,6 +28,7 @@ import { getAvailableGovernments } from './government.js';
 import { TECHNOLOGIES } from './tech.js';
 import { uiState, UIStateType, UnitStatus } from './uistate.js';
 import * as reports from './reports.js';
+import { getNation, getNationIds } from './nations.js';
 
 // Game state
 let selectedUnit = null;
@@ -49,6 +50,8 @@ function setupUIState() {
     });
 
     // Handle state changes for keeping game.js state in sync
+    uiState.onNewTurn = saveGame;
+
     uiState.onStateChange = (state) => {
         switch (state.type) {
             case UIStateType.TURN_ENDED:
@@ -418,7 +421,9 @@ function confirmQuit() {
         { label: 'Keep Playing', value: false },
         { label: 'Yes, start over', value: true },
     ], (quit) => {
-        if (quit) location.reload();
+        if (!quit) return;
+        if (!DEBUG) localStorage.removeItem(SAVE_KEY);
+        location.reload();
     });
 }
 
@@ -873,11 +878,8 @@ function updateTurnDisplay() {
 // INITIALIZATION
 // ============================================
 
-function initGame(gameData) {
-    // Setup canvas
-    const { mainCanvas, minimapCanvas } = initCanvas();
-
-    // Setup UI state machine
+function initGame() {
+    const { mainCanvas } = initCanvas();
     setupUIState();
 
     // Setup event handlers (single canvas handles both map and minimap)
@@ -897,35 +899,88 @@ function initGame(gameData) {
         renderWithState();
     });
 
-    // Load map
-    world.unpackMap(gameData.mapPacked);
-
-    // Load rivers (if present)
-    if (gameData.riversPacked) {
-        world.unpackRivers(gameData.riversPacked);
+    if (DEBUG) {
+        startDebugGame();
+    } else {
+        showTitleScreen();
     }
+}
 
-    // Distribute bonus resources across the map (~1/16 chance per tile)
-    world.distributeResources();
+// ============================================
+// STARTING, SAVING AND LOADING
+// ============================================
 
-    // Every civilization starts with a settler and a militia, the human player first
-    world.setupGame('egyptians', gameData.starts.length - 1);
-    world.players.forEach((player, i) => {
-        const [x, y] = gameData.starts[i];
-        player.createUnit('settler', x, y);
-        player.createUnit('militia', x, y);
+// ?debug=1 skips the title screen and shows the whole map, and doesn't touch the saved game
+const DEBUG = new URLSearchParams(location.search).has('debug');
+const DIFFICULTIES = ['Chieftain', 'Warlord', 'Prince', 'King', 'Emperor'];
+const SAVE_KEY = 'civ-save';
+// Bump when what is saved changes, so an older save is dropped rather than loaded half broken
+const SAVE_VERSION = 1;
+
+function savedGame() {
+    const save = JSON.parse(localStorage.getItem(SAVE_KEY));
+    return save?.version === SAVE_VERSION ? save : null;
+}
+
+function saveGame() {
+    if (DEBUG) return;
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ version: SAVE_VERSION, world }));
+}
+
+function showTitleScreen() {
+    const save = savedGame();
+    const options = [{ label: 'Start a New Game', value: null }];
+    if (save) {
+        const player = save.world.players[save.world.humanPlayerIndex];
+        options.unshift({ label: `Continue the ${getNation(player.nationId).name}`, value: save });
+    }
+    uiState.showSetupChoice(null, options, (choice) => choice ? continueGame(choice) : chooseDifficulty());
+}
+
+function chooseDifficulty() {
+    uiState.showSetupChoice('Difficulty Level...', DIFFICULTIES.map((label, value) => ({ label, value })), chooseCompetition);
+}
+
+function chooseCompetition(difficulty) {
+    const options = [3, 4, 5, 6, 7].map(n => ({ label: `${n} Civilizations`, value: n }));
+    uiState.showSetupChoice('Level of Competition...', options, (civs) => chooseTribe(difficulty, civs));
+}
+
+function chooseTribe(difficulty, civs) {
+    const options = getNationIds().map(id => ({ label: `${getNation(id).name} (${getNation(id).leader})`, value: id }));
+    uiState.showSetupChoice('Pick your tribe...', options, (nationId) => {
+        const leader = prompt('Your name:', getNation(nationId).leader) || getNation(nationId).leader;
+        startNewGame(nationId, leader, civs, difficulty, ['settler']);
     });
+}
 
-    const [startX, startY] = gameData.starts[0];
-    centerViewOn(startX, startY);
+async function startNewGame(nationId, leaderName, civs, difficulty, startingUnits) {
+    uiState.showSetupChoice('Creating the world...', [], null);
+    const map = await fetch(`/projects/civ/map?players=${civs}`).then(response => response.json());
+    world.unpackMap(map.map);
+    world.unpackRivers(map.rivers);
+    world.distributeResources();
+    world.difficulty = difficulty;
+    world.setupGame(nationId, civs - 1);
+    world.humanPlayer.leaderName = leaderName;
+    world.players.forEach((player, i) => {
+        const [x, y] = map.starts[i];
+        for (const type of startingUnits) player.createUnit(type, x, y);
+    });
+    world.exploreAroundHuman();
+    saveGame();
+    uiState.selectNextUnit();
+}
 
-    // Select first unit and start blinking
-    if (world.humanPlayer.units.length > 0) {
-        selectUnit(world.humanPlayer.units[0]);
-    }
-
-    // Initial render
+async function startDebugGame() {
+    await startNewGame('egyptians', 'Ramesses', 4, 0, ['settler', 'militia']);
+    world.revealAll();
     renderWithState();
+}
+
+function continueGame(save) {
+    world.load(save.world);
+    uiState.selectNextUnit();
 }
 
 // ============================================

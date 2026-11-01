@@ -16,7 +16,8 @@ Rules data (techs, units, buildings, wonders, terrain, governments) follows the 
 `civ1` ruleset.
 
 - [ ] AI naval expansion and invasions
-- [ ] Difficulty levels (content citizens, research cost, combat modifiers)
+- [ ] Difficulty levels (content citizens, research cost, combat modifiers); the choice is
+  already made at the start and stored in `world.difficulty`
 - [ ] Railroads, fortresses, pollution and global warming
 - [ ] Caravan trade routes, diplomats, diplomacy between civilizations
 - [ ] Barbarians and huts
@@ -189,6 +190,32 @@ selectNextUnit() → ...
 ---
 
 ## Game Loop
+
+### Starting, saving and loading
+
+The page opens on a title screen (`showTitleScreen` in game.js): Continue when there is a
+saved game, or Start a New Game, which asks for the difficulty (stored in `world.difficulty`,
+not used by the rules yet), the number of civilizations (3 to 7, you included), the tribe and
+your name. Only then does the page ask the server for a map, `/projects/civ/map?players=N`,
+which returns the packed terrain and rivers and a starting position per player. Every
+civilization starts with one settler.
+
+The game saves itself to localStorage (`civ-save`) once each turn has been played, before its
+events show, and once at the start. `world.toJSON()` and `world.load()` cover the map, the
+players with their units and cities, and the explored tiles. The save carries
+`SAVE_VERSION`; bump it when what is saved changes, so older saves are dropped. Quit removes
+the save.
+
+`?debug=1` skips all of it: Egyptians with a settler and a militia against three others, the
+whole map and every unit visible, and nothing saved.
+
+### Fog of war
+
+The human player only sees the tiles within one of their units and two of their cities, and
+remembers every tile seen (`world.explored`, updated after each move, each new city and each
+turn). Unexplored tiles are black on the map, the minimap and the world map; enemy cities
+show once their tile is explored, enemy units only while the human player can see them
+(`world.humanSees`). The computer players see everything, as in Civ 1.
 
 ### Turn Processing
 
