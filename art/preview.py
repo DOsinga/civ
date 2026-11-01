@@ -86,6 +86,16 @@ def related(a, b):
     return a == b or any(a in group and b in group for group in TERRAIN_GROUPS)
 
 
+# How far the pixel is from a side of the tile, or from a corner, as in view.js
+def distance(part, px, py):
+    x, y = px + 0.5, py + 0.5
+    dx = x if "w" in part else TILE - x
+    dy = y if "n" in part else TILE - y
+    if len(part) == 2:
+        return (dx * dx + dy * dy) ** 0.5
+    return dx if part in "we" else dy
+
+
 MISSING = {name for name, info in json.loads((HERE / "sprites.json").read_text())["sprites"].items() if info.get("missing")}
 
 
@@ -148,20 +158,42 @@ def render(terrain, rivers, routes, sprite_dirs, resources=None, wrap=False, sca
         return get(terrain, x, y, None) is not None
 
     water = find("terrain/water", sprite_dirs)
+
+    def land_tile(name, x, y, mask):
+        tile = find("terrain/land_base", sprite_dirs)
+        texture = find(f"terrain/{name}_texture", sprite_dirs)
+        if texture:
+            k = texture.width // TILE
+            tile.alpha_composite(texture.crop(((x % k) * TILE, (y % k) * TILE, (x % k + 1) * TILE, (y % k + 1) * TILE)))
+        overlay = find(f"terrain/{name}/{mask}", sprite_dirs)
+        if overlay:
+            tile.alpha_composite(overlay)
+        return tile
+
+    # The land behind the beach on an ocean tile, as in view.js: each pixel takes the terrain
+    # of the nearest land tile next to it
+    def coast_land(shore, mask, x, y):
+        cut = Image.new("RGBA", (TILE, TILE))
+        for key in ([str(mask)] if mask else []) + [part for part, _ in shore if len(part) == 2]:
+            cut.alpha_composite(find(f"terrain/coast_land/{key}", sprite_dirs))
+        full = {part: land_tile(name, x, y, 15) for part, name in shore}
+        result = Image.new("RGBA", (TILE, TILE))
+        for py in range(TILE):
+            for px in range(TILE):
+                if cut.getpixel((px, py))[3]:
+                    part = min(full, key=lambda part: distance(part, px, py))
+                    result.putpixel((px, py), full[part].getpixel((px, py)))
+        return result
     image = Image.new("RGBA", (width * TILE, height * TILE))
     for y in range(height):
         for x in range(width):
             tile = Image.new("RGBA", (TILE, TILE))
             name = terrain[y][x]
             if name:
-                tile.alpha_composite(find("terrain/land_base", sprite_dirs))
                 neighbours = {side: get(terrain, x + dx, y + dy, None) for side, (dx, dy) in SIDES.items()}
-                n, e, s, w = (related(name, neighbours[side]) for side in "nesw")
-                texture = find(f"terrain/{name}_texture", sprite_dirs)
-                if texture:
-                    k = texture.width // TILE
-                    tile.alpha_composite(texture.crop(((x % k) * TILE, (y % k) * TILE, (x % k + 1) * TILE, (y % k + 1) * TILE)))
-                layers = [f"terrain/{name}/{n | e << 1 | s << 2 | w << 3}"]
+                n, e, s, w = (other is None or related(name, other) for other in neighbours.values())
+                tile = land_tile(name, x, y, n | e << 1 | s << 2 | w << 3)
+                layers = []
                 layers += [f"terrain/{other}_edge/{side}" for side, other in neighbours.items()
                            if other != name and related(name, other)]
                 if rivers[y][x]:
@@ -183,12 +215,16 @@ def render(terrain, rivers, routes, sprite_dirs, resources=None, wrap=False, sca
                 mask = n | e << 1 | s << 2 | w << 3
                 # With a water texture, open sea has no sprite of its own
                 layers = [f"terrain/ocean/{mask}"] if mask or not water else []
+                shore = [(side, get(terrain, x + dx, y + dy, None)) for side, (dx, dy) in SIDES.items()
+                         if land(x + dx, y + dy)]
                 for corner, open_sides, dx, dy in [
                     ("nw", not n and not w, -1, -1), ("ne", not n and not e, 1, -1),
                     ("sw", not s and not w, -1, 1), ("se", not s and not e, 1, 1),
                 ]:
                     if open_sides and land(x + dx, y + dy):
                         layers.append(f"terrain/ocean_corner/{corner}")
+                        shore.append((corner, get(terrain, x + dx, y + dy, None)))
+                tile.alpha_composite(coast_land(shore, mask, x, y))
                 # A mouth is named after the side the river comes in from, as in view.js
                 for (side, (dx, dy)), towards_here in zip(SIDES.items(), [4, 8, 1, 2]):
                     if land(x + dx, y + dy) and get(rivers, x + dx, y + dy, 0) & towards_here:

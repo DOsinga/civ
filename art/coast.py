@@ -6,6 +6,7 @@ transparent where the open sea shows through. The sheet still asks for a complet
 tile (ocean/0); slicing turns its waves into the water texture.
 """
 
+import colorsys
 import random
 from collections import Counter
 
@@ -83,14 +84,44 @@ def fit(cell, name):
 
 
 # Turn the sliced sprites into what the game uses: the open-sea tile becomes the water
-# texture, and the coast tiles become overlays with the open sea cut out.
+# texture, and the coast tiles become overlays with the open sea cut out. The grass behind the
+# beach moves to its own sprite, terrain/coast_land/<key>, which the game fills with the
+# terrain of the land next to it.
 def finish(sprites):
     water = water_texture(sprites.pop("terrain/ocean/0"))
     for mask_value in range(1, 16):
         name = f"terrain/ocean/{mask_value}"
         sprites[name] = cut_out_open_sea(sprites[name], name)
+    for name in [n for n in sprites if n.startswith("terrain/ocean")]:
+        beach, grass = split_off_grass(sprites[name])
+        sprites[name] = darken_sand(beach)
+        sprites[f"terrain/coast_land/{name.split('/')[-1]}"] = grass
     sprites["terrain/water"] = water
     return sprites
+
+
+# The drawn sand is bright yellow and outshines the land next to it
+def darken_sand(sprite):
+    pixels = sprite.load()
+    for y in range(TILE):
+        for x in range(TILE):
+            r, g, b, a = pixels[x, y]
+            if a and r > 190 and r >= g > b + 40:
+                h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+                pixels[x, y] = tuple(round(c * 255) for c in colorsys.hsv_to_rgb(h, s * 0.75, v * 0.85)) + (a,)
+    return sprite
+
+
+def split_off_grass(sprite):
+    beach = sprite.copy()
+    grass = Image.new("RGBA", sprite.size)
+    for y in range(TILE):
+        for x in range(TILE):
+            r, g, b, a = sprite.getpixel((x, y))
+            if a and g > r and g > b:
+                grass.putpixel((x, y), (r, g, b, a))
+                beach.putpixel((x, y), (0, 0, 0, 0))
+    return beach, grass
 
 
 def is_sea(r, g, b):

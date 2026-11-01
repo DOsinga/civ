@@ -86,12 +86,23 @@ export function drawTexture(ctx, name, x, y, width, height) {
 
 const COLOR_TOLERANCE = 30;
 
-function recolor(s, colorHex) {
+function spriteCanvas(s) {
     const canvas = document.createElement('canvas');
     canvas.width = s.w;
     canvas.height = s.h;
-    const c = canvas.getContext('2d', { willReadFrequently: true });
-    c.drawImage(image, s.x, s.y, s.w, s.h, 0, 0, s.w, s.h);
+    canvas.getContext('2d', { willReadFrequently: true }).drawImage(image, s.x, s.y, s.w, s.h, 0, 0, s.w, s.h);
+    return canvas;
+}
+
+// The sprite's pixels at atlas resolution
+export function spritePixels(name) {
+    const s = meta.sprites[name];
+    return spriteCanvas(s).getContext('2d').getImageData(0, 0, s.w, s.h);
+}
+
+function recolor(s, colorHex) {
+    const canvas = spriteCanvas(s);
+    const c = canvas.getContext('2d');
 
     const [mr, mg, mb] = meta.playerColor;
     const r = parseInt(colorHex.slice(1, 3), 16);

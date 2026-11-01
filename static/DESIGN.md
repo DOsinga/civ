@@ -372,12 +372,14 @@ Conventions:
   seams. Re-slice them if the land base changes.
 - The open sea is one seamless texture, `terrain/water` (8x8 tiles), anchored to the map so
   there is no visible tile grid; its width divides the map width so it joins where the map
-  wraps. Ocean tiles draw their piece of it, then the coast overlay `terrain/ocean/<mask>`
-  (sides with land; transparent where the open sea shows; there is no mask 0), then
+  wraps. Ocean tiles draw their piece of it, then the strip of land behind the beach, then the
+  beach and surf `terrain/ocean/<mask>` (sides with land; there is no mask 0), then
   `terrain/ocean_corner/*` for land that only touches a corner.
-
-The coast and land base are new art; the rest are still the original Civ 1 sprites doubled in
-size, as stand-ins.
+- The strip of land behind the beach, `terrain/coast_land/<mask or corner>`, is the grass
+  `coast.py` splits off the drawn coast. The game only uses it as a mask: each of its pixels
+  is painted with the terrain of the nearest side or corner with land (land base, texture and
+  the full overlay, mask 15), so forest, desert or ice runs on into the beach. Land tiles count
+  the sea as a related neighbour, so they run to the tile edge towards it and leave no gap.
 
 ### Getting new art drawn
 

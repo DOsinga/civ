@@ -11,7 +11,7 @@ import { uiState, UIStateType } from './uistate.js';
 import {
     initCityView, setCityScreenData, isCityScreenOpen, renderCityScreen, drawBuildingSprite
 } from './city_view.js';
-import { loadAtlas, isAtlasLoaded, hasSprite, spriteSize, drawSprite, drawSpritePart, drawSpriteInColor, drawTexture } from './sprites.js';
+import { loadAtlas, isAtlasLoaded, hasSprite, spriteSize, spritePixels, drawSprite, drawSpritePart, drawSpriteInColor, drawTexture } from './sprites.js';
 
 // ============================================
 // CONSTANTS - see UI_SETUP.md
@@ -137,24 +137,28 @@ function drawTerrainTile(terrainType, destX, destY, mapX, mapY) {
         const hasS = world.isLand(mapX, mapY + 1) ? 1 : 0;
         const hasW = world.isLand(mapX - 1, mapY) ? 1 : 0;
         const mask = hasN | (hasE << 1) | (hasS << 2) | (hasW << 3);
-        drawMapTexture('terrain/water', mapX, mapY, destX, destY);
-        drawSprite(ctx, `terrain/ocean/${mask}`, destX, destY);
-
+        const shore = [['n', 0, -1], ['e', 1, 0], ['s', 0, 1], ['w', -1, 0]]
+            .filter(([, dx, dy]) => world.isLand(mapX + dx, mapY + dy));
         // Land that only touches a corner
-        if (!hasN && !hasW && world.isLand(mapX - 1, mapY - 1)) drawSprite(ctx, 'terrain/ocean_corner/nw', destX, destY);
-        if (!hasN && !hasE && world.isLand(mapX + 1, mapY - 1)) drawSprite(ctx, 'terrain/ocean_corner/ne', destX, destY);
-        if (!hasS && !hasW && world.isLand(mapX - 1, mapY + 1)) drawSprite(ctx, 'terrain/ocean_corner/sw', destX, destY);
-        if (!hasS && !hasE && world.isLand(mapX + 1, mapY + 1)) drawSprite(ctx, 'terrain/ocean_corner/se', destX, destY);
+        const corners = [['nw', -1, -1, !hasN && !hasW], ['ne', 1, -1, !hasN && !hasE],
+                         ['sw', -1, 1, !hasS && !hasW], ['se', 1, 1, !hasS && !hasE]]
+            .filter(([, dx, dy, open]) => open && world.isLand(mapX + dx, mapY + dy));
+        shore.push(...corners);
+
+        drawMapTexture(ctx, 'terrain/water', mapX, mapY, destX, destY);
+        if (shore.length) drawCoastLand(shore, mask, mapX, mapY, destX, destY);
+        drawSprite(ctx, `terrain/ocean/${mask}`, destX, destY);
+        for (const [corner] of corners) drawSprite(ctx, `terrain/ocean_corner/${corner}`, destX, destY);
 
         drawRiverMouths(destX, destY, mapX, mapY);
     } else {
         const name = getTerrainName(terrainType).toLowerCase();
-        drawSprite(ctx, 'terrain/land_base', destX, destY);
-        drawMapTexture(`terrain/${name}_texture`, mapX, mapY, destX, destY);
         const neighbours = [['n', 0, -1], ['e', 1, 0], ['s', 0, 1], ['w', -1, 0]]
             .map(([side, dx, dy]) => [side, world.getTerrainAt(mapX + dx, mapY + dy)]);
-        const mask = neighbours.reduce((m, [, other], i) => m | (relatedTerrain(terrainType, other) ? 1 << i : 0), 0);
-        drawSprite(ctx, `terrain/${name}/${mask}`, destX, destY);
+        // Towards the sea the land runs to the edge of the tile, up to the beach on the ocean tile
+        const mask = neighbours.reduce((m, [, other], i) =>
+            m | (other === TERRAIN.OCEAN || relatedTerrain(terrainType, other) ? 1 << i : 0), 0);
+        drawLand(ctx, name, mask, mapX, mapY, destX, destY);
         for (const [side, other] of neighbours) {
             if (other !== terrainType && relatedTerrain(terrainType, other)) {
                 drawSprite(ctx, `terrain/${getTerrainName(other).toLowerCase()}_edge/${side}`, destX, destY);
@@ -174,15 +178,79 @@ function relatedTerrain(a, b) {
     return a === b || TERRAIN_GROUPS.some(group => group.includes(a) && group.includes(b));
 }
 
+function drawLand(c, name, mask, mapX, mapY, destX, destY) {
+    drawSprite(c, 'terrain/land_base', destX, destY);
+    drawMapTexture(c, `terrain/${name}_texture`, mapX, mapY, destX, destY);
+    drawSprite(c, `terrain/${name}/${mask}`, destX, destY);
+}
+
 // The open sea and carpet terrains like forest are seamless textures anchored to the map, so
 // they show no tile grid. A texture's width in tiles divides the map width, so it also joins up
 // where the map wraps around. The tile drawn on top leaves a hole where the texture shows.
-function drawMapTexture(name, mapX, mapY, destX, destY) {
+function drawMapTexture(c, name, mapX, mapY, destX, destY) {
     if (!hasSprite(name)) return;
     const tiles = spriteSize(name).w / TILE_SIZE;
     const px = (((mapX % tiles) + tiles) % tiles) * TILE_SIZE;
     const py = (((mapY % tiles) + tiles) % tiles) * TILE_SIZE;
-    drawSpritePart(ctx, name, px, py, TILE_SIZE, TILE_SIZE, destX, destY);
+    drawSpritePart(c, name, px, py, TILE_SIZE, TILE_SIZE, destX, destY);
+}
+
+// Behind the beach on an ocean tile is a strip of land, terrain/coast_land, painted with the
+// terrain of the land next to it so the land runs on into the beach. Each pixel of the strip
+// takes the terrain of the nearest side or corner with land.
+const coastMasks = new Map();
+let coastCanvas = null;
+
+function coastPartMasks(parts, mask) {
+    const key = `${mask}|${parts.join()}`;
+    if (coastMasks.has(key)) return coastMasks.get(key);
+    const strips = [...(mask ? [String(mask)] : []), ...parts.filter(part => part.length === 2)]
+        .map(name => spritePixels(`terrain/coast_land/${name}`));
+    const size = strips[0].width;
+    const masks = new Map(parts.map(part => [part, new ImageData(size, size)]));
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            if (!strips.some(strip => strip.data[i + 3])) continue;
+            const distance = part => {
+                const dx = part.includes('w') ? x + 0.5 : size - x - 0.5;
+                const dy = part.includes('n') ? y + 0.5 : size - y - 0.5;
+                return part.length === 2 ? Math.hypot(dx, dy) : (part === 'w' || part === 'e' ? dx : dy);
+            };
+            const nearest = parts.reduce((a, b) => distance(b) < distance(a) ? b : a);
+            masks.get(nearest).data[i + 3] = 255;
+        }
+    }
+    const canvases = new Map();
+    for (const [part, data] of masks) {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        canvas.getContext('2d').putImageData(data, 0, 0);
+        canvases.set(part, canvas);
+    }
+    coastMasks.set(key, canvases);
+    return canvases;
+}
+
+function drawCoastLand(shore, mask, mapX, mapY, destX, destY) {
+    const masks = coastPartMasks(shore.map(([part]) => part), mask);
+    const size = masks.values().next().value.width;
+    if (!coastCanvas) {
+        coastCanvas = document.createElement('canvas');
+        coastCanvas.width = coastCanvas.height = size;
+    }
+    const c = coastCanvas.getContext('2d');
+    c.setTransform(size / TILE_SIZE, 0, 0, size / TILE_SIZE, 0, 0);
+    c.imageSmoothingEnabled = false;
+    for (const [part, dx, dy] of shore) {
+        const name = getTerrainName(world.getTerrainAt(mapX + dx, mapY + dy)).toLowerCase();
+        c.globalCompositeOperation = 'source-over';
+        c.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
+        drawLand(c, name, 15, mapX, mapY, 0, 0);
+        c.globalCompositeOperation = 'destination-in';
+        c.drawImage(masks.get(part), 0, 0, TILE_SIZE, TILE_SIZE);
+        ctx.drawImage(coastCanvas, destX, destY, TILE_SIZE, TILE_SIZE);
+    }
 }
 
 // Rivers: riverIndex is a 4-bit value, N=1, E=2, S=4, W=8. Straight pieces come in three
