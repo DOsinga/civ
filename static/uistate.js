@@ -19,6 +19,8 @@ export const UIStateType = {
     BUY_CONFIRM: 'buy_confirm',             // Confirm purchase dialog
     INFO_DIALOG: 'info_dialog',             // Dismissable notification
     CHOICE_DIALOG: 'choice_dialog',         // User must make a choice
+    MENU: 'menu',                           // A menu from the menu bar is open
+    REPORT: 'report',                       // Full-screen advisor, world or Civilopedia report
 };
 
 class UIStateMachine {
@@ -27,6 +29,7 @@ class UIStateMachine {
         this.data = null;
         this.pendingEvents = [];
         this.onStateChange = null;  // Callback for rendering
+        this.lastUnit = null;       // Unit to return to after a menu or report closes
 
         // View integration callbacks (set by game.js) - for rendering only, not state
         this.viewCallbacks = {
@@ -208,6 +211,7 @@ class UIStateMachine {
 
         this.state = UIStateType.UNIT_ACTIVE;
         this.data = { unit };
+        this.lastUnit = unit;
 
         if (this.viewCallbacks.centerViewOn) {
             this.viewCallbacks.centerViewOn(unit.x, unit.y);
@@ -220,6 +224,85 @@ class UIStateMachine {
             });
         }
         this.notify();
+    }
+
+    // Go back to the unit that was active before a menu, dialog or report, if it still needs orders
+    resume() {
+        const unit = this.lastUnit;
+        if (unit && unit.status === UnitStatus.WAITING_ORDERS && unit.movesLeft > 0 &&
+            world.humanPlayer.units.includes(unit)) {
+            this.activateUnit(unit);
+        } else {
+            this.selectNextUnit();
+        }
+    }
+
+    // menus: [{ title, items: [{ label, key, action, disabled }] }]
+    openMenu(menus, index) {
+        this.viewCallbacks.stopBlinking?.();
+        this.state = UIStateType.MENU;
+        this.data = { menus, index: 0, selectedIndex: 0 };
+        this.switchMenu(index);
+    }
+
+    switchMenu(index) {
+        const count = this.data.menus.length;
+        this.data.index = (index + count) % count;
+        this.data.selectedIndex = this.data.menus[this.data.index].items.findIndex(item => !item.disabled);
+        this.notify();
+    }
+
+    moveMenuSelection(step) {
+        const items = this.data.menus[this.data.index].items;
+        let i = this.data.selectedIndex;
+        for (let n = 0; n < items.length; n++) {
+            i = (i + step + items.length) % items.length;
+            if (!items[i].disabled) break;
+        }
+        this.data.selectedIndex = i;
+        this.notify();
+    }
+
+    chooseMenuItem(index) {
+        if (this.state !== UIStateType.MENU) return;
+        const item = this.data.menus[this.data.index].items[index];
+        if (!item || item.disabled) return;
+        this.data = null;
+        this.resume();
+        item.action();
+    }
+
+    closeMenu() {
+        if (this.state !== UIStateType.MENU) return;
+        this.data = null;
+        this.resume();
+    }
+
+    // report: { title, lines, items?, onSelect?, onClose?, worldMap? }
+    showReport(report) {
+        this.viewCallbacks.stopBlinking?.();
+        this.state = UIStateType.REPORT;
+        this.data = { selectedIndex: 0, lines: [], ...report };
+        this.notify();
+    }
+
+    chooseReportItem(index) {
+        if (this.state !== UIStateType.REPORT || !this.data.items?.[index]) return;
+        const { items, onSelect } = this.data;
+        this.data = null;
+        this.resume();
+        onSelect(items[index].value);
+    }
+
+    closeReport() {
+        if (this.state !== UIStateType.REPORT) return;
+        const onClose = this.data.onClose;
+        this.data = null;
+        if (onClose) {
+            onClose();
+        } else {
+            this.resume();
+        }
     }
 
     // Open city screen
@@ -317,14 +400,14 @@ class UIStateMachine {
         if (this.state !== UIStateType.CHOICE_DIALOG) return;
         const { options, onSelect } = this.data;
         this.data = null;
-        this.selectNextUnit();
+        this.resume();
         onSelect(options[index].value);
     }
 
     cancelChoice() {
         if (this.state !== UIStateType.CHOICE_DIALOG) return;
         this.data = null;
-        this.selectNextUnit();
+        this.resume();
     }
 
     // Dismiss current info dialog
@@ -487,6 +570,36 @@ class UIStateMachine {
                 return true;
             }
 
+            case UIStateType.MENU: {
+                const items = this.data.menus[this.data.index].items;
+                const shortcut = items.findIndex(item => item.key === key && !item.disabled);
+                if (key === 'ArrowUp' || key === 'ArrowDown') {
+                    this.moveMenuSelection(key === 'ArrowUp' ? -1 : 1);
+                } else if (key === 'ArrowLeft' || key === 'ArrowRight') {
+                    this.switchMenu(this.data.index + (key === 'ArrowLeft' ? -1 : 1));
+                } else if (key === 'Enter') {
+                    this.chooseMenuItem(this.data.selectedIndex);
+                } else if (key === 'Escape') {
+                    this.closeMenu();
+                } else if (shortcut >= 0) {
+                    this.chooseMenuItem(shortcut);
+                }
+                return true;
+            }
+
+            case UIStateType.REPORT: {
+                const count = this.data.items?.length || 0;
+                if (count && (key === 'ArrowUp' || key === 'ArrowDown')) {
+                    this.data.selectedIndex = (this.data.selectedIndex + (key === 'ArrowUp' ? count - 1 : 1)) % count;
+                    this.notify();
+                } else if (count && key === 'Enter') {
+                    this.chooseReportItem(this.data.selectedIndex);
+                } else if (!count || key === 'Escape') {
+                    this.closeReport();
+                }
+                return true;
+            }
+
             case UIStateType.CITY_SCREEN:
                 if (key === 'Escape') {
                     this.closeCity();
@@ -498,20 +611,6 @@ class UIStateMachine {
                 const unit = this.data?.unit;
                 if (!unit) return false;
 
-                if (key === ' ') {
-                    // Skip - mark as done, select next
-                    unit.skip();
-                    this.selectNextUnit();
-                    return true;
-                }
-                if (key === 'f' || key === 'F') {
-                    // Fortify
-                    if (!unit.isCivilian) {
-                        unit.fortify();
-                        this.selectNextUnit();
-                        return true;
-                    }
-                }
                 if (key === 'Enter' && unit.movesLeft <= 0) {
                     // Unit has no moves - allow ending turn
                     this.endTurn();
