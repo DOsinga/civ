@@ -32,7 +32,6 @@ import { getNation, getNationIds } from './nations.js';
 
 // Game state
 let selectedUnit = null;
-let unitActivatedFromGarrison = false;  // True if unit was explicitly selected from city garrison
 
 // Helper to render with current UI state
 function renderWithState() {
@@ -231,8 +230,6 @@ function handleMapClick(e) {
             // Handle tile click in city map - toggle worker
             handleCityTileClick(action.dx, action.dy);
         } else if (action && action.type === 'garrison') {
-            // Clicked a garrisoned unit - activate it and mark as activated from garrison
-            unitActivatedFromGarrison = true;
             selectUnit(action.unit);
         }
         return;
@@ -561,9 +558,6 @@ function tryMoveUnit() {
 
     if (dx === 0 && dy === 0) return;
 
-    // Clear garrison activation flag when unit moves
-    unitActivatedFromGarrison = false;
-
     // Use moveUnit which handles combat
     moveUnit(selectedUnit, dx, dy);
 }
@@ -658,7 +652,6 @@ function selectUnitAt(mapX, mapY) {
 
 function selectNextUnit() {
     // Delegate to UI state machine
-    unitActivatedFromGarrison = false;
     uiState.selectNextUnit();
 }
 
@@ -988,5 +981,4 @@ function continueGame(save) {
 // ============================================
 
 window.initGame = initGame;
-window.isUnitActivatedFromGarrison = () => unitActivatedFromGarrison;
 window.loadSprites = loadSprites;

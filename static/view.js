@@ -802,15 +802,10 @@ function drawMapTiles(selectedUnit) {
         if (!isSelected && selectedUnit && unit.x === selectedUnit.x && unit.y === selectedUnit.y) continue;
         if (unit.player !== world.humanPlayer.id && !world.humanSees(unit.x, unit.y)) continue;
 
-        // Skip units that are inside a city (garrisoned)
-        // Only draw selected unit at city if explicitly activated from garrison
-        const cityAtUnit = world.getCityAt(unit.x, unit.y);
-        if (cityAtUnit) {
-            const activatedFromGarrison = window.isUnitActivatedFromGarrison?.() ?? false;
-            if (!isSelected || !activatedFromGarrison) {
-                continue;  // Unit is garrisoned in city, don't draw on map
-            }
-        }
+        // Fortified and sentried units in a city are its garrison and hide inside it; a unit with
+        // orders to take, or just passing through, stands on top of the city
+        const stationed = unit.status === UnitStatus.FORTIFIED || unit.status === UnitStatus.SENTRY;
+        if (!isSelected && stationed && world.getCityAt(unit.x, unit.y)) continue;
 
         // Use animated position if this unit is animating
         let sx, sy;
