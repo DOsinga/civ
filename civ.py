@@ -2,6 +2,7 @@ import json
 import math
 import random
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 from projects.common import Project
@@ -609,8 +610,22 @@ def pack_rivers(rivers: list) -> str:
 NUM_PLAYERS = 4
 
 
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+# Browsers keep static files for a while, and a page that mixes old and new modules breaks.
+# Each module and the atlas get a version from their modification time, through an import map
+# for the modules, so a changed file is always fetched fresh.
+def versioned_url(path):
+    return f"/static/projects/civ/{path.relative_to(STATIC_DIR)}?v={int(path.stat().st_mtime)}"
+
+
 class Civ(Project):
     def fill_dict(self, request, d):
+        modules = {f"/static/projects/civ/{path.name}": versioned_url(path) for path in STATIC_DIR.glob("*.js")}
+        d["import_map"] = json.dumps({"imports": modules})
+        d["atlas_png"] = versioned_url(STATIC_DIR / "assets/atlas.png")
+        d["atlas_json"] = versioned_url(STATIC_DIR / "assets/atlas.json")
         seed = random.randint(0, 2**31)
         terrain, rivers = generate_map(seed)
         d["map_packed"] = pack_map(terrain)

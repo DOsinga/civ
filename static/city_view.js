@@ -125,8 +125,8 @@ export function isCityScreenOpen() {
 // SPRITES
 // ============================================
 
-const ICON_SIZE = 7;
-const ICON_SPACING = 8;
+const ICON_SIZE = 8;
+const ICON_SPACING = 9;
 
 // Icons in a row, pushed closer together when there are too many to fit in width, as in Civ 1
 function drawIconRow(icons, x, y, width, spacing = ICON_SPACING) {
@@ -303,8 +303,8 @@ function drawTileYields(yields, tileX, tileY) {
     const [food, prod, trade] = yields;
     const icons = [...repeat('icon/food', food), ...repeat('icon/shield', prod), ...repeat('icon/trade', trade)];
     const perRow = Math.max(2, Math.ceil(icons.length / 2));
-    drawIconRow(icons.slice(0, perRow), tileX + 1, tileY + 1, TILE_SIZE - 2);
-    drawIconRow(icons.slice(perRow), tileX + 1, tileY + 8, TILE_SIZE - 2);
+    drawIconRow(icons.slice(0, perRow), tileX, tileY, TILE_SIZE);
+    drawIconRow(icons.slice(perRow), tileX, tileY + ICON_SIZE, TILE_SIZE);
 }
 
 // Icons filling a box row by row; when the total wouldn't fit, the rows are squeezed together,

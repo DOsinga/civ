@@ -25,6 +25,7 @@ github: civ
     <canvas id="game-canvas" width="960" height="592"></canvas>
 </div>
 
+<script type="importmap">{{ import_map|safe }}</script>
 <script type="module">
     import '{{ static }}game.js';
 
@@ -33,5 +34,5 @@ github: civ
         riversPacked: "{{ rivers_packed }}",
         starts: {{ starts_json|safe }}
     });
-    loadSprites("{{ static }}assets/atlas.png", "{{ static }}assets/atlas.json");
+    loadSprites("{{ atlas_png }}", "{{ atlas_json }}");
 </script>
