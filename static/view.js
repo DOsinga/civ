@@ -20,7 +20,7 @@ import { loadAtlas, isAtlasLoaded, hasSprite, spriteSize, spritePixels, drawSpri
 // Everything is laid out in screen units; the canvas has PIXEL_SCALE pixels per unit so that
 // 32 pixel sprites fill a 16 unit tile
 export const VIEW_WIDTH = 480;
-export const VIEW_HEIGHT = 300;
+export const VIEW_HEIGHT = 296;
 export const PIXEL_SCALE = 2;
 export const TILE_SIZE = 16;
 
@@ -84,10 +84,7 @@ export function initCanvas() {
 
 export async function loadSprites(imageUrl, metaUrl) {
     await loadAtlas(imageUrl, metaUrl);
-    if (onImagesLoadedCallback) {
-        onImagesLoadedCallback();
-    }
-    render();
+    onImagesLoadedCallback();
 }
 
 export function setOnImagesLoaded(callback) {
@@ -742,6 +739,9 @@ function drawMapTiles(selectedUnit) {
     for (const unit of world.getAllUnits()) {
         const isSelected = selectedUnit && selectedUnit.id === unit.id;
 
+        // The selected unit hides the others on its tile, so it is on top and blinks over the terrain
+        if (!isSelected && selectedUnit && unit.x === selectedUnit.x && unit.y === selectedUnit.y) continue;
+
         // Skip units that are inside a city (garrisoned)
         // Only draw selected unit at city if explicitly activated from garrison
         const cityAtUnit = world.getCityAt(unit.x, unit.y);
@@ -935,10 +935,6 @@ export function minimapToMap(screenX, screenY) {
 export function openCityScreen(data) {
     setCityScreenData(data);
     render();
-}
-
-export function closeCityScreen() {
-    setCityScreenData(null);
 }
 
 export function getCtx() {

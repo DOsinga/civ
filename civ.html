@@ -12,38 +12,26 @@ github: civ
 <style>
 #game-canvas {
     width: 960px;
-    height: 600px;
+    height: 592px;
     image-rendering: pixelated;
     display: block;
 }
 #game-container {
     display: inline-block;
 }
-/* City screen is now canvas-based */
 </style>
 
-<link rel="stylesheet" href="{{ static }}styles.css">
-
 <div id="game-container">
-    <canvas id="game-canvas" width="960" height="600"></canvas>
+    <canvas id="game-canvas" width="960" height="592"></canvas>
 </div>
-
-<!-- City screen is now rendered on the main canvas -->
 
 <script type="module">
     import '{{ static }}game.js';
 
-    loadSprites("{{ static }}assets/atlas.png", "{{ static }}assets/atlas.json");
-
-    const gameData = {
+    initGame({
         mapPacked: "{{ map_packed }}",
         riversPacked: "{{ rivers_packed }}",
         starts: {{ starts_json|safe }}
-    };
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => initGame(gameData));
-    } else {
-        initGame(gameData);
-    }
+    });
+    loadSprites("{{ static }}assets/atlas.png", "{{ static }}assets/atlas.json");
 </script>

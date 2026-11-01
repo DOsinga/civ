@@ -598,7 +598,8 @@ export class World {
             }
         }
 
-        if (!player.currentResearch) {
+        // Without a city there is no science, so nothing to research yet
+        if (!player.currentResearch && player.cities.length > 0) {
             if (player.isHuman) {
                 events.push({ type: GameEventType.NO_RESEARCH });
             } else {

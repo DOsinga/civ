@@ -4,11 +4,7 @@ import { TERRAIN, IMPROVEMENT, getImprovementBonus, canIrrigate } from './terrai
 import { UNIT_TYPES, GameEventType } from './units.js';
 import { IMPROVEMENTS } from './improvements.js';
 import { world, MAP_WIDTH } from './world.js';
-import {
-    render,
-    openCityScreen as viewOpenCityScreen,
-    closeCityScreen as viewCloseCityScreen,
-} from './view.js';
+import { openCityScreen as viewOpenCityScreen } from './view.js';
 import { uiState, UIStateType } from './uistate.js';
 
 const CITY_TILES = [];
@@ -484,12 +480,6 @@ export function helpBuildWonder(city, caravan, player) {
 // CITY SCREEN
 // ============================================
 
-let selectedUnitRef = null;
-
-export function setCityScreenUnitRef(unit) {
-    selectedUnitRef = unit;
-}
-
 export function isCityScreenOpen() {
     return uiState.getState().type === UIStateType.CITY_SCREEN;
 }
@@ -500,11 +490,6 @@ export function getCurrentCity() {
 
 export function openCityScreen(city) {
     viewOpenCityScreen(calculateCity(city));
-}
-
-export function closeCityScreen() {
-    viewCloseCityScreen();
-    render(selectedUnitRef);
 }
 
 export function updateCityScreen() {

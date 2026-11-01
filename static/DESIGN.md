@@ -45,7 +45,6 @@ static/projects/civ/
 ├── improvements.js   # City improvement and wonder definitions
 ├── citymanagement.js # City yields, production, citizen assignment
 ├── sprites.js        # Loads the sprite atlas, draws sprites by name
-├── styles.css        # CSS styles
 └── assets/
     ├── atlas.png     # Every sprite, packed by art/pack_atlas.py
     └── atlas.json    # Name, position and size of each sprite in atlas.png
@@ -315,7 +314,7 @@ A 400 turn, four civ game takes a few seconds.
 
 ### Screen Layout
 
-Everything is laid out in screen units: 480x300 for the whole screen, 16 units per map tile.
+Everything is laid out in screen units: 480x296 for the whole screen (a 25 by 18 tile map under the menu bar), 16 units per map tile.
 The canvas has 2 pixels per unit (4 on high density screens), so the 32 pixel sprites are
 drawn pixel for pixel. It is shown at 960x600.
 

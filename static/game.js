@@ -20,7 +20,7 @@ import {
 import { handleCityScreenClick } from './city_view.js';
 import {
     isCityScreenOpen, getCurrentCity, updateCityScreen,
-    openCityScreen, closeCityScreen, setCityScreenUnitRef,
+    openCityScreen,
     getProductionOptions, getProductionData, changeProduction, getBuyCost, buyProduction,
     helpBuildWonder, renameCity, toggleCityTileWorker
 } from './citymanagement.js';
@@ -57,7 +57,6 @@ function setupUIState() {
 
             case UIStateType.UNIT_ACTIVE:
                 selectedUnit = state.data?.unit;
-                setCityScreenUnitRef(selectedUnit);
                 renderWithState();
                 break;
 
@@ -193,7 +192,6 @@ function handleMapClick(e) {
         const { x, y } = toPanelUnits(e.clientX, e.clientY);
         const action = handleCityScreenClick(x, y);
         if (action === 'exit') {
-            closeCityScreen();
             uiState.closeCity();
         } else if (action === 'change') {
             showChangeProductionDialog();
@@ -208,7 +206,6 @@ function handleMapClick(e) {
             handleCityTileClick(action.dx, action.dy);
         } else if (action && action.type === 'garrison') {
             // Clicked a garrisoned unit - activate it and mark as activated from garrison
-            closeCityScreen();
             unitActivatedFromGarrison = true;
             selectUnit(action.unit);
         }
@@ -616,8 +613,11 @@ function foundCity() {
 
     world.foundCity(selectedUnit, name);
 
-    // Select next unit through state machine
-    uiState.selectNextUnit();
+    if (world.humanPlayer.currentResearch) {
+        uiState.selectNextUnit();
+    } else {
+        uiState.showResearchChoice();
+    }
 }
 
 function buildImprovement(improvementType) {
@@ -754,11 +754,11 @@ function initGame(gameData) {
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
 
-    // Now that images are loaded, start blinking for selected unit
     setOnImagesLoaded(() => {
         if (selectedUnit && selectedUnit.canMove()) {
             startBlinking(() => renderWithState());
         }
+        renderWithState();
     });
 
     // Load map
