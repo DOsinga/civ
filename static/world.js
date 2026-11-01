@@ -38,7 +38,8 @@ export class World {
         this.improvements = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(null));
     }
 
-    // Each terrain type has a 1/16 chance to have its bonus resource
+    // One bonus resource per 4x4 square, placed in the square's top-left 3x3 so that resources
+    // in neighbouring squares never touch
     distributeResources(seed = null) {
         const random = seed !== null
             ? (() => {
@@ -50,10 +51,14 @@ export class World {
             })()
             : () => Math.random();
 
-        for (let y = 0; y < MAP_HEIGHT; y++) {
-            for (let x = 0; x < MAP_WIDTH; x++) {
+        const SQUARE = 4;
+        for (let sy = 0; sy < MAP_HEIGHT; sy += SQUARE) {
+            for (let sx = 0; sx < MAP_WIDTH; sx += SQUARE) {
+                const x = sx + Math.floor(random() * (SQUARE - 1));
+                const y = sy + Math.floor(random() * (SQUARE - 1));
+                if (y >= MAP_HEIGHT) continue;
                 const resourceType = getResourceForTerrain(this.terrain[y][x]);
-                if (resourceType && random() < 0.0625) {
+                if (resourceType) {
                     this.resources[y][x] = resourceType;
                 }
             }

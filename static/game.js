@@ -905,7 +905,7 @@ function initGame(gameData) {
         world.unpackRivers(gameData.riversPacked);
     }
 
-    // Distribute bonus resources across the map (~1/16 chance per tile)
+    // Distribute bonus resources across the map, one per 4x4 square
     world.distributeResources();
 
     // Every civilization starts with a settler and a militia, the human player first
